@@ -34,39 +34,70 @@ def load_data():
 
 def main():
     # Language selection
-    col1, col2 = st.columns([3, 1])
-    
+    col1, col2, col3 = st.columns([3, 1, 2])
+
     with col2:
         language = st.selectbox(
             "Language / Язык / Jazyk",
             options=list(LANGUAGES.keys()),
             format_func=lambda x: LANGUAGES[x]["language_name"]
         )
-    
+
+    # --- AUTH HEADER ---
+    import streamlit.components.v1 as components
+    import http.cookies
+    username = None
+    session_cookie = None
+    with col3:
+        # Попытка получить cookie через js (ограничено в Streamlit Cloud, но работает локально)
+        cookie_js = """
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const cookies = document.cookie;
+            window.parent.postMessage({type: 'streamlit:setSessionCookie', cookies: cookies}, '*');
+        });
+        </script>
+        """
+        components.html(cookie_js, height=0)
+        # Пытаемся получить username из query params (как вариант интеграции)
+        if 'username' in st.query_params:
+            username = st.query_params['username']
+        # UI
+        if username:
+            with st.expander(f"👤 {username}"):
+                st.markdown(f"[Настройки](http://127.0.0.1:8000/accounts/profile/)  ")
+                st.markdown(f"[Выйти](http://127.0.0.1:8000/accounts/logout/)")
+        else:
+            st.markdown(
+                '<a href="http://127.0.0.1:8000/accounts/signup/" target="_blank"><button style="margin-right:10px">Регистрация</button></a>'
+                '<a href="http://127.0.0.1:8000/accounts/login/" target="_blank"><button>Вход</button></a>',
+                unsafe_allow_html=True
+            )
+
     with col1:
         st.title(get_text(language, "app_title"))
         st.markdown(get_text(language, "app_subtitle"))
-    
+
     # Load available data files
     data_files = load_data()
-    
+
     if not data_files:
         st.error(get_text(language, "file_not_found"))
         st.markdown(get_text(language, "file_instructions"))
         return
-    
+
     # Sidebar navigation
     st.sidebar.header(get_text(language, "navigation"))
-    
+
     # View mode selection
     view_mode = st.sidebar.radio(
         get_text(language, "view_mode"),
         get_text(language, "view_modes")
     )
-    
+
     # Data file selection
     st.sidebar.header(get_text(language, "data_selection"))
-    
+
     if "📖" in view_mode:  # Recipes mode
         recipe_files = [f for f in data_files.keys() if 'recipe' in f.lower()]
         # Prioritize RAW_recipes.csv
@@ -74,7 +105,6 @@ def main():
             default_idx = recipe_files.index('RAW_recipes.csv')
         else:
             default_idx = 0
-            
         if recipe_files:
             selected_file = st.sidebar.selectbox(
                 get_text(language, "select_data"),
@@ -84,7 +114,7 @@ def main():
             show_recipes(data_files[selected_file], language)
         else:
             st.error(get_text(language, "select_file_sidebar"))
-            
+
     elif "💬" in view_mode:  # Reviews mode
         review_files = [f for f in data_files.keys() if 'interaction' in f.lower()]
         # Prioritize RAW_interactions.csv
@@ -92,7 +122,6 @@ def main():
             default_idx = review_files.index('RAW_interactions.csv')
         else:
             default_idx = 0
-            
         if review_files:
             selected_file = st.sidebar.selectbox(
                 get_text(language, "select_data"),
@@ -102,13 +131,12 @@ def main():
             show_reviews(data_files[selected_file], language)
         else:
             st.error(get_text(language, "select_reviews_sidebar"))
-            
+
     elif "📊" in view_mode:  # Analysis mode
         st.sidebar.write("**Available datasets:**")
         for file_name in data_files.keys():
             file_size = os.path.getsize(data_files[file_name]) / (1024*1024)  # MB
             st.sidebar.write(f"• {file_name} ({file_size:.1f} MB)")
-        
         selected_file = st.sidebar.selectbox(
             get_text(language, "select_data"),
             list(data_files.keys())
